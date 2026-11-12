@@ -117,7 +117,13 @@ export function Sidebar({
   currentUser,
   recentCourses = [],
   isTeamAdmin = false,
-}: SidebarProps) {
+  headerSlot,
+  navSlot,
+}: SidebarProps & {
+  // PROTOTYPE: slots for the notification feed prototype
+  headerSlot?: React.ReactNode;
+  navSlot?: React.ReactNode;
+}) {
   const currentUserRole = currentUser?.role ?? null;
   const [isDark, setIsDark] = useState(false);
 
@@ -140,6 +146,7 @@ export function Sidebar({
         <NavLink to="/" className="text-lg font-bold tracking-tight">
           Cadence
         </NavLink>
+        {headerSlot && <div className="ml-auto">{headerSlot}</div>}
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
@@ -178,6 +185,7 @@ export function Sidebar({
             Team
           </NavLink>
         )}
+        {navSlot}
       </nav>
 
       {recentCourses.length > 0 && (

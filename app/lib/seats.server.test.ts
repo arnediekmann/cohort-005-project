@@ -131,3 +131,36 @@ describe("claiming a Seat", () => {
     });
   });
 });
+
+describe("the All Seats claimed Notification", () => {
+  it("tells the Team Licence buyer when the last Unclaimed Seat is claimed", () => {
+    claimSeat(db, "SEAT-1", addStudent("Sam").id, "DE");
+
+    const result = claimSeat(db, "SEAT-2", addStudent("Kim").id, "DE");
+
+    expect(result).toMatchObject({
+      ok: true,
+      notifications: [
+        {
+          workflow: "all-seats-claimed",
+          recipients: [{ id: String(purchase.userId), name: "Bea" }],
+          data: { courseTitle: base.course.title, link: "/team" },
+        },
+      ],
+    });
+  });
+
+  it("tells no one when an earlier Seat is claimed", () => {
+    const result = claimSeat(db, "SEAT-1", addStudent("Sam").id, "DE");
+
+    expect(result).toMatchObject({ ok: true, notifications: [] });
+  });
+
+  it("tells no one when the claim on the last Seat fails", () => {
+    claimSeat(db, "SEAT-1", addStudent("Sam").id, "DE");
+
+    const result = claimSeat(db, "SEAT-2", addStudent("Kim").id, "FR");
+
+    expect(result).not.toHaveProperty("notifications");
+  });
+});

@@ -1,0 +1,16 @@
+{
+  "name": "Instructor Reply",
+  "description": "The course's Instructor replied to a Discussion Question. Sent to the person who asked.",
+  "categories": [],
+  "steps": [
+    {
+      "ref": "in_app_feed_1",
+      "type": "channel",
+      "channel_key": "cadence-in-app",
+      "template": {
+        "action_url": "{{ data.link }}",
+        "markdown_body@": "in_app_feed_1/markdown_body.md"
+      }
+    }
+  ]
+}

@@ -30,7 +30,7 @@ beforeEach(() => {
 
 describe("createComment", () => {
   it("posts a Discussion Question with a trimmed body", () => {
-    const comment = createComment(db, base.user.id, lessonId, null, "  Why?  ");
+    const { comment } = createComment(db, base.user.id, lessonId, null, "  Why?  ");
 
     expect(comment).toMatchObject({
       userId: base.user.id,
@@ -41,9 +41,9 @@ describe("createComment", () => {
   });
 
   it("posts a Discussion Reply under a Discussion Question", () => {
-    const question = createComment(db, base.user.id, lessonId, null, "Why?");
+    const { comment: question } = createComment(db, base.user.id, lessonId, null, "Why?");
 
-    const reply = createComment(
+    const { comment: reply } = createComment(
       db,
       base.instructor.id,
       lessonId,
@@ -84,7 +84,7 @@ describe("createComment", () => {
   });
 
   it("rejects a parent on another lesson", () => {
-    const question = createComment(db, base.user.id, otherLessonId, null, "Q");
+    const { comment: question } = createComment(db, base.user.id, otherLessonId, null, "Q");
 
     expect(() =>
       createComment(db, base.instructor.id, lessonId, question.id, "A")
@@ -92,11 +92,65 @@ describe("createComment", () => {
   });
 
   it("keeps replies one level deep", () => {
-    const question = createComment(db, base.user.id, lessonId, null, "Q");
-    const reply = createComment(db, base.instructor.id, lessonId, question.id, "A");
+    const { comment: question } = createComment(db, base.user.id, lessonId, null, "Q");
+    const { comment: reply } = createComment(db, base.instructor.id, lessonId, question.id, "A");
 
     expect(() =>
       createComment(db, base.user.id, lessonId, reply.id, "A to A")
     ).toThrow("Replies can only be one level deep");
+  });
+});
+
+describe("createComment notifications", () => {
+  it("tells the Discussion Question's author when the Instructor replies", () => {
+    const { comment: question } = createComment(db, base.user.id, lessonId, null, "Why?");
+
+    const { notifications } = createComment(
+      db,
+      base.instructor.id,
+      lessonId,
+      question.id,
+      "Because."
+    );
+
+    expect(notifications).toEqual([
+      {
+        workflow: "instructor-reply",
+        recipients: [{ id: String(base.user.id), name: "Test User" }],
+        data: {
+          instructorName: "Test Instructor",
+          courseTitle: "Test Course",
+          lessonTitle: "Lesson 1",
+          link: `/courses/test-course/lessons/${lessonId}#comment-${question.id}`,
+        },
+      },
+    ]);
+  });
+
+  it("notifies no one when the Instructor replies to their own Discussion Question", () => {
+    const { comment: question } = createComment(db, base.instructor.id, lessonId, null, "Q");
+
+    const { notifications } = createComment(db, base.instructor.id, lessonId, question.id, "A");
+
+    expect(notifications).toEqual([]);
+  });
+
+  it("notifies no one when another Student or a Platform Admin replies", () => {
+    const [student, admin] = [
+      { name: "Other Student", email: "other@example.com", role: schema.UserRole.Student },
+      { name: "Admin", email: "admin@example.com", role: schema.UserRole.Admin },
+    ].map((user) => db.insert(schema.users).values(user).returning().get());
+    const { comment: question } = createComment(db, base.user.id, lessonId, null, "Q");
+
+    for (const replier of [student, admin]) {
+      const { notifications } = createComment(db, replier.id, lessonId, question.id, "A");
+      expect(notifications).toEqual([]);
+    }
+  });
+
+  it("notifies no one for a Discussion Question", () => {
+    const { notifications } = createComment(db, base.instructor.id, lessonId, null, "Q");
+
+    expect(notifications).toEqual([]);
   });
 });

@@ -391,6 +391,37 @@ describe("approving a Refund Request", () => {
     });
   });
 
+  it("tells the buyer, and no one else, that the Refund Request was approved", () => {
+    const purchase = buyForSelf(base.user.id);
+    const id = raise(purchase.id, base.user.id);
+
+    const result = approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+
+    expect(result.ok && result.notifications).toEqual([
+      {
+        workflow: "refund-request-decided",
+        recipients: [{ id: String(base.user.id), name: "Test User" }],
+        data: {
+          courseTitle: "Test Course",
+          decision: "approved",
+          link: "/courses/test-course",
+        },
+      },
+    ]);
+  });
+
+  it("sends no Notifications when the approval is refused", () => {
+    const priya = addLearner("Priya");
+    const { purchase, seats } = buySeats(priya.id, 2);
+    const id = raise(purchase.id, priya.id);
+    claimSeat(seats[0].id, addLearner("Ben").id);
+
+    const result = approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+
+    expect(result.ok).toBe(false);
+    expect(result).not.toHaveProperty("notifications");
+  });
+
   it("emails the buyer that the refund is on its way", () => {
     const purchase = buyForSelf(base.user.id);
     const id = raise(purchase.id, base.user.id);
@@ -431,6 +462,26 @@ describe("declining a Refund Request", () => {
     expect(result.email.body).toContain("You finished the course.");
     expect(isEnrolled(base.user.id)).toBe(true);
     expect(checkRefundRequest(db, purchase.id, base.user.id, NOW).ok).toBe(true);
+  });
+
+  it("tells the Team Admin who bought the Team Licence that it was declined", () => {
+    const priya = addLearner("Priya");
+    const { purchase } = buySeats(priya.id, 2);
+    const id = raise(purchase.id, priya.id);
+
+    const result = declineRefundRequest(db, id, platformAdmin.id, "Too late.", NOW);
+
+    expect(result.ok && result.notifications).toEqual([
+      {
+        workflow: "refund-request-decided",
+        recipients: [{ id: String(priya.id), name: "Priya" }],
+        data: {
+          courseTitle: "Test Course",
+          decision: "declined",
+          link: "/courses/test-course",
+        },
+      },
+    ]);
   });
 
   it("frees a Team Licence's Seats again", () => {

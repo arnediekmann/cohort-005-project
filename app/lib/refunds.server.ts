@@ -15,8 +15,10 @@ import {
   videoWatchEvents,
   LessonProgressStatus,
   RefundStatus,
+  UserRole,
 } from "~/db/schema";
 import { formatPrice } from "~/lib/utils";
+import type { Notification } from "~/lib/notifier.server";
 import {
   REFUND_COMPLETION_LIMIT,
   REFUND_WATCH_LIMIT_SECONDS,
@@ -351,7 +353,13 @@ export function getRefundOffer(
 export type Email = { to: string; subject: string; body: string };
 
 export type RaiseResult =
-  | { ok: true; refundRequestId: number; kind: PurchaseKind; email: Email }
+  | {
+      ok: true;
+      refundRequestId: number;
+      kind: PurchaseKind;
+      email: Email;
+      notifications: Notification[];
+    }
   | Failure;
 
 export function raiseRefundRequest(
@@ -405,7 +413,29 @@ export function raiseRefundRequest(
         "— The Cadence team",
       ].join("\n"),
     },
+    notifications: [
+      {
+        workflow: "refund-request-raised",
+        recipients: listPlatformAdmins(db),
+        data: {
+          buyerName: buyer.name,
+          courseTitle: course.title,
+          link: "/admin/refunds",
+        },
+      },
+    ],
   };
+}
+
+/** Every Platform Admin, as Notification recipients. */
+function listPlatformAdmins(db: Queryable) {
+  return db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .where(eq(users.role, UserRole.Admin))
+    .orderBy(asc(users.id))
+    .all()
+    .map((admin) => ({ id: String(admin.id), name: admin.name }));
 }
 
 // ─── Listing Refund Requests ───

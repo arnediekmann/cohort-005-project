@@ -166,6 +166,41 @@ describe("raising a Refund Request", () => {
     expect(result).toMatchObject({ ok: true, kind: "individual_purchase" });
   });
 
+  it("tells every Platform Admin, and no one else, about the New Open Refund Request", () => {
+    const secondAdmin = db
+      .insert(schema.users)
+      .values({ name: "Sam Admin", email: "sam@example.com", role: UserRole.Admin })
+      .returning()
+      .get();
+    const purchase = buyForSelf(base.user.id);
+
+    const result = raiseRefundRequest(db, purchase.id, base.user.id, "Nope.", NOW);
+
+    expect(result.ok && result.notifications).toEqual([
+      {
+        workflow: "refund-request-raised",
+        recipients: [
+          { id: String(platformAdmin.id), name: "Pat Admin" },
+          { id: String(secondAdmin.id), name: "Sam Admin" },
+        ],
+        data: {
+          buyerName: "Test User",
+          courseTitle: "Test Course",
+          link: "/admin/refunds",
+        },
+      },
+    ]);
+  });
+
+  it("sends no Notifications when the Refund Request is refused", () => {
+    const purchase = buyForSelf(base.user.id);
+    const someoneElse = addLearner("Ben");
+
+    const result = raiseRefundRequest(db, purchase.id, someoneElse.id, "Nope.", NOW);
+
+    expect(result).not.toHaveProperty("notifications");
+  });
+
   it("refuses anyone but the buyer", () => {
     const purchase = buyForSelf(base.user.id);
     const someoneElse = addLearner("Ben");

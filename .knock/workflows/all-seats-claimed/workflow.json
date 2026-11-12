@@ -1,0 +1,16 @@
+{
+  "name": "All Seats claimed",
+  "description": "The last Unclaimed Seat on a Team Licence was claimed. Sent to the Team Licence buyer.",
+  "categories": [],
+  "steps": [
+    {
+      "ref": "in_app_feed_1",
+      "type": "channel",
+      "channel_key": "cadence-in-app",
+      "template": {
+        "action_url": "{{ data.link }}",
+        "markdown_body@": "in_app_feed_1/markdown_body.md"
+      }
+    }
+  ]
+}

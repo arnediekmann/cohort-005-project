@@ -15,8 +15,10 @@ import {
   videoWatchEvents,
   LessonProgressStatus,
   RefundStatus,
+  UserRole,
 } from "~/db/schema";
 import { formatPrice } from "~/lib/utils";
+import { toRecipient, type Notification } from "~/lib/notifier.server";
 import {
   REFUND_COMPLETION_LIMIT,
   REFUND_WATCH_LIMIT_SECONDS,
@@ -351,7 +353,13 @@ export function getRefundOffer(
 export type Email = { to: string; subject: string; body: string };
 
 export type RaiseResult =
-  | { ok: true; refundRequestId: number; kind: PurchaseKind; email: Email }
+  | {
+      ok: true;
+      refundRequestId: number;
+      kind: PurchaseKind;
+      email: Email;
+      notifications: Notification[];
+    }
   | Failure;
 
 export function raiseRefundRequest(
@@ -405,7 +413,29 @@ export function raiseRefundRequest(
         "— The Cadence team",
       ].join("\n"),
     },
+    notifications: [
+      {
+        workflow: "refund-request-raised",
+        recipients: listPlatformAdmins(db),
+        data: {
+          buyerName: buyer.name,
+          courseTitle: course.title,
+          link: "/admin/refunds",
+        },
+      },
+    ],
   };
+}
+
+/** Every Platform Admin, as Notification recipients. */
+function listPlatformAdmins(db: Queryable) {
+  return db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .where(eq(users.role, UserRole.Admin))
+    .orderBy(asc(users.id))
+    .all()
+    .map(toRecipient);
 }
 
 // ─── Listing Refund Requests ───
@@ -568,7 +598,9 @@ export function listTeamLicences(db: Queryable, buyerId: number, now: Date) {
 
 // ─── Deciding a Refund Request ───
 
-export type DecisionResult = { ok: true; email: Email } | Failure;
+export type DecisionResult =
+  | { ok: true; email: Email; notifications: Notification[] }
+  | Failure;
 
 function findOpenRefundRequest(
   tx: Queryable,
@@ -679,7 +711,7 @@ export function approveRefundRequest(
 
     return {
       ok: true,
-      email: buildDecisionEmail(tx, purchase, RefundStatus.Approved, note),
+      ...buildDecisionMessages(tx, purchase, RefundStatus.Approved, note),
     };
   });
 }
@@ -722,7 +754,7 @@ export function declineRefundRequest(
 
     return {
       ok: true,
-      email: buildDecisionEmail(
+      ...buildDecisionMessages(
         tx,
         found.purchase,
         RefundStatus.Declined,
@@ -732,13 +764,13 @@ export function declineRefundRequest(
   });
 }
 
-/** The email the buyer gets once their Refund Request is decided. */
-function buildDecisionEmail(
+/** The email and Notification the buyer gets once their Refund Request is decided. */
+function buildDecisionMessages(
   db: Queryable,
   purchase: Purchase,
   decision: RefundStatus.Approved | RefundStatus.Declined,
   note: string | null
-): Email {
+): { email: Email; notifications: Notification[] } {
   const buyer = db
     .select()
     .from(users)
@@ -768,14 +800,29 @@ function buildDecisionEmail(
         ];
 
   return {
-    to: buyer?.email ?? "",
-    subject: `Refund ${decision} — ${courseTitle}`,
-    body: [
-      `Hi ${buyer?.name ?? "there"},`,
-      "",
-      ...middle,
-      "",
-      "— The Cadence team",
-    ].join("\n"),
+    email: {
+      to: buyer?.email ?? "",
+      subject: `Refund ${decision} — ${courseTitle}`,
+      body: [
+        `Hi ${buyer?.name ?? "there"},`,
+        "",
+        ...middle,
+        "",
+        "— The Cadence team",
+      ].join("\n"),
+    },
+    notifications: buyer
+      ? [
+          {
+            workflow: "refund-request-decided",
+            recipients: [toRecipient(buyer)],
+            data: {
+              courseTitle,
+              decision,
+              link: course ? `/courses/${course.slug}` : "/courses",
+            },
+          },
+        ]
+      : [],
   };
 }

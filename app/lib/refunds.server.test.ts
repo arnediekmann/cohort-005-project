@@ -166,6 +166,41 @@ describe("raising a Refund Request", () => {
     expect(result).toMatchObject({ ok: true, kind: "individual_purchase" });
   });
 
+  it("tells every Platform Admin, and no one else, about the New Open Refund Request", () => {
+    const secondAdmin = db
+      .insert(schema.users)
+      .values({ name: "Sam Admin", email: "sam@example.com", role: UserRole.Admin })
+      .returning()
+      .get();
+    const purchase = buyForSelf(base.user.id);
+
+    const result = raiseRefundRequest(db, purchase.id, base.user.id, "Nope.", NOW);
+
+    expect(result.ok && result.notifications).toEqual([
+      {
+        workflow: "refund-request-raised",
+        recipients: [
+          { id: String(platformAdmin.id), name: "Pat Admin" },
+          { id: String(secondAdmin.id), name: "Sam Admin" },
+        ],
+        data: {
+          buyerName: "Test User",
+          courseTitle: "Test Course",
+          link: "/admin/refunds",
+        },
+      },
+    ]);
+  });
+
+  it("sends no Notifications when the Refund Request is refused", () => {
+    const purchase = buyForSelf(base.user.id);
+    const someoneElse = addLearner("Ben");
+
+    const result = raiseRefundRequest(db, purchase.id, someoneElse.id, "Nope.", NOW);
+
+    expect(result).not.toHaveProperty("notifications");
+  });
+
   it("refuses anyone but the buyer", () => {
     const purchase = buyForSelf(base.user.id);
     const someoneElse = addLearner("Ben");
@@ -356,6 +391,37 @@ describe("approving a Refund Request", () => {
     });
   });
 
+  it("tells the buyer, and no one else, that the Refund Request was approved", () => {
+    const purchase = buyForSelf(base.user.id);
+    const id = raise(purchase.id, base.user.id);
+
+    const result = approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+
+    expect(result.ok && result.notifications).toEqual([
+      {
+        workflow: "refund-request-decided",
+        recipients: [{ id: String(base.user.id), name: "Test User" }],
+        data: {
+          courseTitle: "Test Course",
+          decision: "approved",
+          link: "/courses/test-course",
+        },
+      },
+    ]);
+  });
+
+  it("sends no Notifications when the approval is refused", () => {
+    const priya = addLearner("Priya");
+    const { purchase, seats } = buySeats(priya.id, 2);
+    const id = raise(purchase.id, priya.id);
+    claimSeat(seats[0].id, addLearner("Ben").id);
+
+    const result = approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+
+    expect(result.ok).toBe(false);
+    expect(result).not.toHaveProperty("notifications");
+  });
+
   it("emails the buyer that the refund is on its way", () => {
     const purchase = buyForSelf(base.user.id);
     const id = raise(purchase.id, base.user.id);
@@ -380,6 +446,17 @@ describe("declining a Refund Request", () => {
     });
   });
 
+  it("sends no Notifications when the decline is refused", () => {
+    const purchase = buyForSelf(base.user.id);
+    const id = raise(purchase.id, base.user.id);
+    approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+
+    const result = declineRefundRequest(db, id, platformAdmin.id, "Too late.", NOW);
+
+    expect(result.ok).toBe(false);
+    expect(result).not.toHaveProperty("notifications");
+  });
+
   it("keeps the buyer's Enrollment and lets them raise a new Refund Request", () => {
     const purchase = buyForSelf(base.user.id);
     const id = raise(purchase.id, base.user.id);
@@ -396,6 +473,26 @@ describe("declining a Refund Request", () => {
     expect(result.email.body).toContain("You finished the course.");
     expect(isEnrolled(base.user.id)).toBe(true);
     expect(checkRefundRequest(db, purchase.id, base.user.id, NOW).ok).toBe(true);
+  });
+
+  it("tells the Team Admin who bought the Team Licence that it was declined", () => {
+    const priya = addLearner("Priya");
+    const { purchase } = buySeats(priya.id, 2);
+    const id = raise(purchase.id, priya.id);
+
+    const result = declineRefundRequest(db, id, platformAdmin.id, "Too late.", NOW);
+
+    expect(result.ok && result.notifications).toEqual([
+      {
+        workflow: "refund-request-decided",
+        recipients: [{ id: String(priya.id), name: "Priya" }],
+        data: {
+          courseTitle: "Test Course",
+          decision: "declined",
+          link: "/courses/test-course",
+        },
+      },
+    ]);
   });
 
   it("frees a Team Licence's Seats again", () => {

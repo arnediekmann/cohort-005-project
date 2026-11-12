@@ -446,6 +446,17 @@ describe("declining a Refund Request", () => {
     });
   });
 
+  it("sends no Notifications when the decline is refused", () => {
+    const purchase = buyForSelf(base.user.id);
+    const id = raise(purchase.id, base.user.id);
+    approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+
+    const result = declineRefundRequest(db, id, platformAdmin.id, "Too late.", NOW);
+
+    expect(result.ok).toBe(false);
+    expect(result).not.toHaveProperty("notifications");
+  });
+
   it("keeps the buyer's Enrollment and lets them raise a new Refund Request", () => {
     const purchase = buyForSelf(base.user.id);
     const id = raise(purchase.id, base.user.id);

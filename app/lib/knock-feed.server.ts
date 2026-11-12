@@ -8,33 +8,28 @@ type KnockEnv = Partial<
 >;
 
 export type KnockFeedConfig = {
-  publicApiKey: string | null;
-  feedChannelId: string | null;
-  userId: string | null;
-  userToken: string | null;
+  publicApiKey: string;
+  feedChannelId: string | undefined;
+  userId: string;
+  userToken: string | undefined;
 };
 
-// What the client needs for the Notification Feed. A null publicApiKey means
-// the Knock provider stays disabled and the bell shows an empty feed.
+// What the client needs for the Notification Feed. Null means the Knock
+// provider stays disabled and the bell shows an empty feed.
 export async function knockFeedConfig(
   env: KnockEnv,
   currentUserId: number | null
-): Promise<KnockFeedConfig> {
+): Promise<KnockFeedConfig | null> {
   if (!env.KNOCK_PUBLIC_API_KEY || currentUserId === null) {
-    return {
-      publicApiKey: null,
-      feedChannelId: null,
-      userId: null,
-      userToken: null,
-    };
+    return null;
   }
   const userId = String(currentUserId);
   return {
     publicApiKey: env.KNOCK_PUBLIC_API_KEY,
-    feedChannelId: env.KNOCK_FEED_CHANNEL_ID ?? null,
+    feedChannelId: env.KNOCK_FEED_CHANNEL_ID,
     userId,
     userToken: env.KNOCK_SIGNING_KEY
       ? await signUserToken(userId, { signingKey: env.KNOCK_SIGNING_KEY })
-      : null,
+      : undefined,
   };
 }

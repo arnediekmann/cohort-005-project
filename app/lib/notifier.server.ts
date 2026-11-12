@@ -11,9 +11,22 @@ import { Knock } from "@knocklabs/node";
 /** Who gets a Notification. Only the Cadence user id and name go to Knock. */
 export type NotificationRecipient = { id: string; name: string };
 
+export function toRecipient(user: {
+  id: number;
+  name: string;
+}): NotificationRecipient {
+  return { id: String(user.id), name: user.name };
+}
+
+/** The Knock workflow keys, one per kind of Notification. */
+export type NotificationWorkflow =
+  | "refund-request-decided"
+  | "refund-request-raised"
+  | "instructor-reply"
+  | "all-seats-claimed";
+
 export type Notification = {
-  /** The Knock workflow key, e.g. "refund-request-raised". */
-  workflow: string;
+  workflow: NotificationWorkflow;
   recipients: NotificationRecipient[];
   /** What the in-app template shows; `link` is the path a click opens. */
   data: Record<string, string>;

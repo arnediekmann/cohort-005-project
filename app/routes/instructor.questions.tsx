@@ -172,7 +172,7 @@ export async function action({ request }: Route.ActionArgs) {
   try {
     ({ notifications } = createComment(
       db,
-      access.userId!,
+      access.userId,
       question.lessonId,
       question.id,
       parsed.data.body

@@ -1,15 +1,12 @@
 import { eq } from "drizzle-orm";
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import * as schema from "~/db/schema";
 import { comments, courses, lessons, modules, users } from "~/db/schema";
 import { MAX_COMMENT_LENGTH, MIN_COMMENT_LENGTH } from "~/lib/comments";
-import type { Notification } from "~/lib/notifier.server";
+import { toRecipient, type Notification } from "~/lib/notifier.server";
+import type { Db } from "~/lib/refunds.server";
 
 // ─── Comments ───
 // Creating Discussion Questions and Discussion Replies on a lesson. See
 // GLOSSARY.md for the language.
-
-export type Db = BetterSQLite3Database<typeof schema>;
 
 export function assertValidCommentBody(body: string) {
   const trimmed = body.trim();
@@ -30,7 +27,8 @@ export function assertValidCommentBody(body: string) {
  * when the body or the parent is invalid.
  *
  * Returns one Instructor Reply Notification when the course's Instructor
- * replies to someone else's Discussion Question; otherwise none.
+ * replies to someone else's Discussion Question that is not deleted;
+ * otherwise none.
  */
 export function createComment(
   db: Db,
@@ -82,13 +80,17 @@ export function createComment(
     .get();
 
   const notifications: Notification[] = [];
-  if (parent && userId === lesson.instructorId && parent.userId !== userId) {
-    const asker = getUserName(db, parent.userId);
+  if (
+    parent &&
+    parent.deletedAt === null &&
+    userId === lesson.instructorId &&
+    parent.userId !== userId
+  ) {
     notifications.push({
       workflow: "instructor-reply",
-      recipients: [{ id: String(parent.userId), name: asker }],
+      recipients: [toRecipient(getUser(db, parent.userId))],
       data: {
-        instructorName: getUserName(db, userId),
+        instructorName: getUser(db, userId).name,
         courseTitle: lesson.courseTitle,
         lessonTitle: lesson.lessonTitle,
         link: `/courses/${lesson.courseSlug}/lessons/${lessonId}#comment-${parent.id}`,
@@ -99,10 +101,14 @@ export function createComment(
   return { comment, notifications };
 }
 
-function getUserName(db: Db, userId: number) {
-  return db
-    .select({ name: users.name })
+function getUser(db: Db, userId: number) {
+  const user = db
+    .select({ id: users.id, name: users.name })
     .from(users)
     .where(eq(users.id, userId))
-    .get()!.name;
+    .get();
+  if (!user) {
+    throw new Error("User not found");
+  }
+  return user;
 }

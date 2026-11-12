@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { describe, it, expect, beforeEach } from "vitest";
 import { createTestDb, seedBaseData } from "~/test/setup";
 import * as schema from "~/db/schema";
@@ -146,6 +147,18 @@ describe("createComment notifications", () => {
       const { notifications } = createComment(db, replier.id, lessonId, question.id, "A");
       expect(notifications).toEqual([]);
     }
+  });
+
+  it("notifies no one when the Discussion Question was deleted", () => {
+    const { comment: question } = createComment(db, base.user.id, lessonId, null, "Q");
+    db.update(schema.comments)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(schema.comments.id, question.id))
+      .run();
+
+    const { notifications } = createComment(db, base.instructor.id, lessonId, question.id, "A");
+
+    expect(notifications).toEqual([]);
   });
 
   it("notifies no one for a Discussion Question", () => {

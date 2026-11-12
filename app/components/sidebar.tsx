@@ -43,7 +43,7 @@ interface SidebarProps {
   currentUser: CurrentUser | null;
   recentCourses?: RecentCourse[];
   isTeamAdmin?: boolean;
-  knock: KnockFeedConfig;
+  knock: KnockFeedConfig | null;
 }
 
 interface NavItem {

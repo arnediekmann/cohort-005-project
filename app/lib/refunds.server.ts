@@ -18,7 +18,7 @@ import {
   UserRole,
 } from "~/db/schema";
 import { formatPrice } from "~/lib/utils";
-import type { Notification } from "~/lib/notifier.server";
+import { toRecipient, type Notification } from "~/lib/notifier.server";
 import {
   REFUND_COMPLETION_LIMIT,
   REFUND_WATCH_LIMIT_SECONDS,
@@ -435,7 +435,7 @@ function listPlatformAdmins(db: Queryable) {
     .where(eq(users.role, UserRole.Admin))
     .orderBy(asc(users.id))
     .all()
-    .map((admin) => ({ id: String(admin.id), name: admin.name }));
+    .map(toRecipient);
 }
 
 // ─── Listing Refund Requests ───
@@ -815,7 +815,7 @@ function buildDecisionMessages(
       ? [
           {
             workflow: "refund-request-decided",
-            recipients: [{ id: String(buyer.id), name: buyer.name }],
+            recipients: [toRecipient(buyer)],
             data: {
               courseTitle,
               decision,

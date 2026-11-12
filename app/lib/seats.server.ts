@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { coupons, courses, enrollments, purchases, users } from "~/db/schema";
 import { getSeatAvailability, type Db } from "~/lib/refunds.server";
-import type { Notification } from "~/lib/notifier.server";
+import { toRecipient, type Notification } from "~/lib/notifier.server";
 
 // Claiming a Seat on a Team Licence. Takes the database first, so tests can
 // hand in an in-memory one.
@@ -27,11 +27,11 @@ export function claimSeat(
 ): SeatClaimResult {
   const seat = db.select().from(coupons).where(eq(coupons.code, code)).get();
   if (!seat) {
-    return { ok: false, error: "Coupon not found" };
+    return { ok: false, error: "Seat not found" };
   }
 
   if (seat.redeemedByUserId !== null) {
-    return { ok: false, error: "Coupon has already been redeemed" };
+    return { ok: false, error: "This Seat has already been claimed" };
   }
 
   const availability = getSeatAvailability(db, seat);
@@ -67,7 +67,7 @@ export function claimSeat(
     return {
       ok: false,
       error:
-        "This coupon can only be redeemed from the same country as the purchaser",
+        "This Seat can only be claimed from the same country as the purchaser",
     };
   }
 
@@ -107,8 +107,8 @@ function allSeatsClaimed(
 
   const licence = db
     .select({
-      buyerId: users.id,
-      buyerName: users.name,
+      id: users.id,
+      name: users.name,
       courseTitle: courses.title,
     })
     .from(purchases)
@@ -121,7 +121,7 @@ function allSeatsClaimed(
   return [
     {
       workflow: "all-seats-claimed",
-      recipients: [{ id: String(licence.buyerId), name: licence.buyerName }],
+      recipients: [toRecipient(licence)],
       data: { courseTitle: licence.courseTitle, link: "/team" },
     },
   ];

@@ -16,6 +16,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import type { KnockFeedConfig } from "~/lib/knock-feed.server";
+import type { NotificationWorkflow } from "~/lib/notifier.server";
 import { cn, formatRelativeTime } from "~/lib/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -33,15 +34,15 @@ import {
 
 // The Notification Feed: Knock's headless hooks under Cadence's own components.
 // No Knock stock components or CSS, so no "Powered by Knock" footer.
-export function NotificationBell({ knock }: { knock: KnockFeedConfig }) {
+export function NotificationBell({ knock }: { knock: KnockFeedConfig | null }) {
   return (
     <KnockProvider
-      apiKey={knock.publicApiKey ?? undefined}
-      user={{ id: knock.userId ?? "" }}
-      userToken={knock.userToken ?? undefined}
-      enabled={knock.publicApiKey !== null}
+      apiKey={knock?.publicApiKey}
+      user={{ id: knock?.userId ?? "" }}
+      userToken={knock?.userToken}
+      enabled={knock !== null}
     >
-      <KnockFeedProvider feedId={knock.feedChannelId ?? undefined}>
+      <KnockFeedProvider feedId={knock?.feedChannelId}>
         <Feed />
       </KnockFeedProvider>
     </KnockProvider>
@@ -50,17 +51,18 @@ export function NotificationBell({ knock }: { knock: KnockFeedConfig }) {
 
 // ponytail: titles are per workflow, not per Notification; read a title from
 // the template if one ever needs to vary (e.g. approved vs declined).
-const WORKFLOWS: Record<string, { title: string; icon: ReactNode }> = {
+type WorkflowDisplay = { title: string; icon: ReactNode };
+const WORKFLOWS: Record<NotificationWorkflow, WorkflowDisplay> = {
   "refund-request-decided": {
     title: "Refund Request decided",
     icon: <ReceiptText className="size-4" />,
   },
   "refund-request-raised": {
-    title: "New Refund Request",
+    title: "New Open Refund Request",
     icon: <Receipt className="size-4" />,
   },
   "instructor-reply": {
-    title: "Your instructor replied",
+    title: "Instructor Reply",
     icon: <MessageSquareReply className="size-4" />,
   },
   "all-seats-claimed": {
@@ -69,9 +71,12 @@ const WORKFLOWS: Record<string, { title: string; icon: ReactNode }> = {
   },
 };
 
+// Knock's feed types the workflow key as any string.
+const workflowsByKey: Partial<Record<string, WorkflowDisplay>> = WORKFLOWS;
+
 type FeedItem = Parameters<Selector<unknown>>[0]["items"][number];
 
-function block(item: FeedItem, name: string) {
+function blockText(item: FeedItem, name: string) {
   const found = item.blocks.find((b) => b.name === name);
   return found && "rendered" in found ? found.rendered : "";
 }
@@ -138,9 +143,9 @@ function Feed() {
             </Empty>
           )}
           {items.map((item) => {
-            const workflow = WORKFLOWS[item.source.key];
+            const workflow = workflowsByKey[item.source.key];
             const isUnread = item.read_at === null;
-            const link = block(item, "action_url");
+            const link = blockText(item, "action_url");
             return (
               <div
                 key={item.id}
@@ -170,7 +175,7 @@ function Feed() {
                     )}
                   </div>
                   <p className="line-clamp-2 text-xs text-muted-foreground">
-                    {plainText(block(item, "body"))}
+                    {plainText(blockText(item, "body"))}
                   </p>
                   <p
                     className="mt-1 text-[11px] text-muted-foreground/70"

@@ -69,14 +69,14 @@ describe("claiming a Seat", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: "Coupon has already been redeemed",
+      error: "This Seat has already been claimed",
     });
   });
 
   it("rejects an unknown code", () => {
     const result = claimSeat(db, "NOPE", addStudent("Sam").id, "DE");
 
-    expect(result).toEqual({ ok: false, error: "Coupon not found" });
+    expect(result).toEqual({ ok: false, error: "Seat not found" });
   });
 
   it("puts the Seat on hold while the Team Licence has an Open Refund Request", () => {
@@ -127,7 +127,7 @@ describe("claiming a Seat", () => {
     expect(result).toEqual({
       ok: false,
       error:
-        "This coupon can only be redeemed from the same country as the purchaser",
+        "This Seat can only be claimed from the same country as the purchaser",
     });
   });
 });

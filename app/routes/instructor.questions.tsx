@@ -14,6 +14,7 @@ import { AlertTriangle, CheckCircle2, ExternalLink } from "lucide-react";
 import { cn, daysSince, formatRelativeTime } from "~/lib/utils";
 import { MAX_COMMENT_LENGTH } from "~/lib/comments";
 import { createComment } from "~/lib/comments.server";
+import { notify, type Notification } from "~/lib/notifier.server";
 import { parseFormData } from "~/lib/validation";
 import { db } from "~/db";
 import {
@@ -167,14 +168,15 @@ export async function action({ request }: Route.ActionArgs) {
   // instructor, or an admin.
   const access = await requireStaff(request, course.courseId);
 
+  let notifications: Notification[];
   try {
-    createComment(
+    ({ notifications } = createComment(
       db,
       access.userId!,
       question.lessonId,
       question.id,
       parsed.data.body
-    );
+    ));
   } catch (error) {
     if (error instanceof Error) {
       return { ok: false, error: error.message };
@@ -182,6 +184,7 @@ export async function action({ request }: Route.ActionArgs) {
     throw error;
   }
 
+  await notify(notifications);
   return { ok: true };
 }
 

@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "~/db/schema";
-import { comments, courses, lessons, modules } from "~/db/schema";
+import { comments, courses, lessons, modules, users } from "~/db/schema";
 import { MAX_COMMENT_LENGTH, MIN_COMMENT_LENGTH } from "~/lib/comments";
+import type { Notification } from "~/lib/notifier.server";
 
 // ─── Comments ───
 // Creating Discussion Questions and Discussion Replies on a lesson. See
@@ -27,6 +28,9 @@ export function assertValidCommentBody(body: string) {
  * Posts a Discussion Question (no parent) or a Discussion Reply (parent is a
  * Discussion Question on the same lesson). Throws with a user-facing message
  * when the body or the parent is invalid.
+ *
+ * Returns one Instructor Reply Notification when the course's Instructor
+ * replies to someone else's Discussion Question; otherwise none.
  */
 export function createComment(
   db: Db,
@@ -38,7 +42,12 @@ export function createComment(
   const trimmed = assertValidCommentBody(body);
 
   const lesson = db
-    .select({ courseId: courses.id })
+    .select({
+      lessonTitle: lessons.title,
+      courseTitle: courses.title,
+      courseSlug: courses.slug,
+      instructorId: courses.instructorId,
+    })
     .from(lessons)
     .innerJoin(modules, eq(lessons.moduleId, modules.id))
     .innerJoin(courses, eq(modules.courseId, courses.id))
@@ -48,8 +57,9 @@ export function createComment(
     throw new Error("Lesson not found");
   }
 
+  let parent: typeof comments.$inferSelect | undefined;
   if (parentId !== null) {
-    const parent = db
+    parent = db
       .select()
       .from(comments)
       .where(eq(comments.id, parentId))
@@ -65,9 +75,34 @@ export function createComment(
     }
   }
 
-  return db
+  const comment = db
     .insert(comments)
     .values({ userId, lessonId, parentId, body: trimmed })
     .returning()
     .get();
+
+  const notifications: Notification[] = [];
+  if (parent && userId === lesson.instructorId && parent.userId !== userId) {
+    const asker = getUserName(db, parent.userId);
+    notifications.push({
+      workflow: "instructor-reply",
+      recipients: [{ id: String(parent.userId), name: asker }],
+      data: {
+        instructorName: getUserName(db, userId),
+        courseTitle: lesson.courseTitle,
+        lessonTitle: lesson.lessonTitle,
+        link: `/courses/${lesson.courseSlug}/lessons/${lessonId}#comment-${parent.id}`,
+      },
+    });
+  }
+
+  return { comment, notifications };
+}
+
+function getUserName(db: Db, userId: number) {
+  return db
+    .select({ name: users.name })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get()!.name;
 }

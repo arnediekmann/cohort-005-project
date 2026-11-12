@@ -10,6 +10,7 @@ import {
   type RenderedComment,
 } from "~/components/comment-thread";
 import { assertValidCommentBody, createComment } from "~/lib/comments.server";
+import { notify } from "~/lib/notifier.server";
 import { db } from "~/db";
 import {
   categories,
@@ -854,13 +855,14 @@ export async function action({ params, request }: Route.ActionArgs) {
         if (!parsed.success) {
           return { ok: false, error: "Enter a comment before posting." };
         }
-        createComment(
+        const { notifications } = createComment(
           db,
           currentUserId,
           lessonId,
           parsed.data.parentId ?? null,
           parsed.data.body
         );
+        await notify(notifications);
         return { ok: true };
       }
 

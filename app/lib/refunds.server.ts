@@ -598,7 +598,9 @@ export function listTeamLicences(db: Queryable, buyerId: number, now: Date) {
 
 // ─── Deciding a Refund Request ───
 
-export type DecisionResult = { ok: true; email: Email } | Failure;
+export type DecisionResult =
+  | { ok: true; email: Email; notifications: Notification[] }
+  | Failure;
 
 function findOpenRefundRequest(
   tx: Queryable,
@@ -709,7 +711,7 @@ export function approveRefundRequest(
 
     return {
       ok: true,
-      email: buildDecisionEmail(tx, purchase, RefundStatus.Approved, note),
+      ...buildDecisionMessages(tx, purchase, RefundStatus.Approved, note),
     };
   });
 }
@@ -752,7 +754,7 @@ export function declineRefundRequest(
 
     return {
       ok: true,
-      email: buildDecisionEmail(
+      ...buildDecisionMessages(
         tx,
         found.purchase,
         RefundStatus.Declined,
@@ -762,13 +764,13 @@ export function declineRefundRequest(
   });
 }
 
-/** The email the buyer gets once their Refund Request is decided. */
-function buildDecisionEmail(
+/** The email and Notification the buyer gets once their Refund Request is decided. */
+function buildDecisionMessages(
   db: Queryable,
   purchase: Purchase,
   decision: RefundStatus.Approved | RefundStatus.Declined,
   note: string | null
-): Email {
+): { email: Email; notifications: Notification[] } {
   const buyer = db
     .select()
     .from(users)
@@ -798,14 +800,29 @@ function buildDecisionEmail(
         ];
 
   return {
-    to: buyer?.email ?? "",
-    subject: `Refund ${decision} — ${courseTitle}`,
-    body: [
-      `Hi ${buyer?.name ?? "there"},`,
-      "",
-      ...middle,
-      "",
-      "— The Cadence team",
-    ].join("\n"),
+    email: {
+      to: buyer?.email ?? "",
+      subject: `Refund ${decision} — ${courseTitle}`,
+      body: [
+        `Hi ${buyer?.name ?? "there"},`,
+        "",
+        ...middle,
+        "",
+        "— The Cadence team",
+      ].join("\n"),
+    },
+    notifications: buyer
+      ? [
+          {
+            workflow: "refund-request-decided",
+            recipients: [{ id: String(buyer.id), name: buyer.name }],
+            data: {
+              courseTitle,
+              decision,
+              link: course ? `/courses/${course.slug}` : "/courses",
+            },
+          },
+        ]
+      : [],
   };
 }

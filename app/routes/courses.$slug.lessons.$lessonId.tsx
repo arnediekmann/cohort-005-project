@@ -1152,6 +1152,9 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
             />
           )}
 
+          {/* Notes — under the video, so the Student can write while watching */}
+          {canViewContent && currentUserId && <LessonNote note={note} />}
+
           {/* Lesson Content */}
           {contentHtml && (
             <div
@@ -1167,9 +1170,6 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
               </CardContent>
             </Card>
           )}
-
-          {/* Notes */}
-          {canViewContent && currentUserId && <LessonNote note={note} />}
 
           {/* Quiz Section */}
           {quiz && enrolled && currentUserId && (

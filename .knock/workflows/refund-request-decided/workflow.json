@@ -1,0 +1,16 @@
+{
+  "name": "Refund Request decided",
+  "description": "A Platform Admin approved or declined a Refund Request. Sent to the buyer.",
+  "categories": [],
+  "steps": [
+    {
+      "ref": "in_app_feed_1",
+      "type": "channel",
+      "channel_key": "cadence-in-app",
+      "template": {
+        "action_url": "{{ data.link }}",
+        "markdown_body@": "in_app_feed_1/markdown_body.md"
+      }
+    }
+  ]
+}
